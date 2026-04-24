@@ -7,7 +7,10 @@ import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
 import { getTokenCount } from "~/lib/tokenizer"
-import { isNullish } from "~/lib/utils"
+import {
+  normalizeOutputTokenParam,
+  translateModelName,
+} from "~/routes/messages/non-stream-translation"
 import {
   createChatCompletions,
   type ChatCompletionResponse,
@@ -24,6 +27,7 @@ export async function handleCompletion(c: Context) {
   const selectedModel = state.models?.data.find(
     (model) => model.id === payload.model,
   )
+  const translatedModel = translateModelName(payload.model)
 
   // Calculate and display token count
   try {
@@ -39,13 +43,11 @@ export async function handleCompletion(c: Context) {
 
   if (state.manualApprove) await awaitApproval()
 
-  if (isNullish(payload.max_tokens)) {
-    payload = {
-      ...payload,
-      max_tokens: selectedModel?.capabilities.limits.max_output_tokens,
-    }
-    consola.debug("Set max_tokens to:", JSON.stringify(payload.max_tokens))
-  }
+  payload = normalizeOutputTokenParam(
+    payload,
+    translatedModel,
+    selectedModel?.capabilities.limits.max_output_tokens,
+  )
 
   const response = await createChatCompletions(payload)
 

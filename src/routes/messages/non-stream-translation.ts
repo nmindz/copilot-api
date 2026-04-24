@@ -1,3 +1,6 @@
+import consola from "consola"
+
+import { isNullish } from "~/lib/utils"
 import {
   type ChatCompletionResponse,
   type ChatCompletionsPayload,
@@ -26,16 +29,94 @@ import { mapOpenAIStopReasonToAnthropic } from "./utils"
 
 // Payload translation
 
+type OutputTokenParam = Partial<
+  Pick<ChatCompletionsPayload, "max_tokens" | "max_completion_tokens">
+>
+
+export function modelUsesMaxCompletionTokens(model: string): boolean {
+  return /^(?:gpt-5(?:[.-]|$)|o[1-9](?:[.-]|$))/.test(model)
+}
+
+export function getOutputTokenParam(
+  model: string,
+  maxTokens: number | null | undefined,
+): OutputTokenParam {
+  if (isNullish(maxTokens)) {
+    return {}
+  }
+
+  return modelUsesMaxCompletionTokens(model) ?
+      { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens }
+}
+
+export function normalizeOutputTokenParam(
+  payload: ChatCompletionsPayload,
+  model: string,
+  defaultMaxTokens?: number | null,
+): ChatCompletionsPayload {
+  const nextPayload: ChatCompletionsPayload = {
+    ...payload,
+  }
+
+  const effectiveMaxTokens =
+    isNullish(payload.max_tokens) ?
+      payload.max_completion_tokens
+    : payload.max_tokens
+
+  if (modelUsesMaxCompletionTokens(model)) {
+    delete nextPayload.max_tokens
+
+    if (!isNullish(effectiveMaxTokens)) {
+      nextPayload.max_completion_tokens = effectiveMaxTokens
+    } else if (!isNullish(defaultMaxTokens)) {
+      nextPayload.max_completion_tokens = defaultMaxTokens
+    }
+
+    consola.debug(
+      "Normalized output token param:",
+      JSON.stringify({
+        model,
+        param: "max_completion_tokens",
+        value: nextPayload.max_completion_tokens,
+      }),
+    )
+
+    return nextPayload
+  }
+
+  delete nextPayload.max_completion_tokens
+
+  if (!isNullish(effectiveMaxTokens)) {
+    nextPayload.max_tokens = effectiveMaxTokens
+  } else if (!isNullish(defaultMaxTokens)) {
+    nextPayload.max_tokens = defaultMaxTokens
+  }
+
+  consola.debug(
+    "Normalized output token param:",
+    JSON.stringify({
+      model,
+      param: "max_tokens",
+      value: nextPayload.max_tokens,
+    }),
+  )
+
+  return nextPayload
+}
+
 export function translateToOpenAI(
   payload: AnthropicMessagesPayload,
 ): ChatCompletionsPayload {
+  const model = translateModelName(payload.model)
+
   return {
-    model: translateModelName(payload.model),
+    model,
     messages: translateAnthropicMessagesToOpenAI(
       payload.messages,
       payload.system,
     ),
-    max_tokens: payload.max_tokens,
+    ...getOutputTokenParam(model, payload.max_tokens),
     stop: payload.stop_sequences,
     stream: payload.stream,
     temperature: payload.temperature,
@@ -46,7 +127,7 @@ export function translateToOpenAI(
   }
 }
 
-function translateModelName(model: string): string {
+export function translateModelName(model: string): string {
   // Subagent requests use a specific model number which Copilot doesn't support
   if (model.startsWith("claude-sonnet-4-")) {
     return model.replace(/^claude-sonnet-4-.*/, "claude-sonnet-4")
