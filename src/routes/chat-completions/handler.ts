@@ -12,10 +12,10 @@ import {
   translateModelName,
 } from "~/routes/messages/non-stream-translation"
 import {
-  createChatCompletions,
   type ChatCompletionResponse,
   type ChatCompletionsPayload,
 } from "~/services/copilot/create-chat-completions"
+import { createCompletion } from "~/services/copilot/create-completion"
 
 export async function handleCompletion(c: Context) {
   await checkRateLimit(state)
@@ -49,7 +49,7 @@ export async function handleCompletion(c: Context) {
     selectedModel?.capabilities.limits.max_output_tokens,
   )
 
-  const response = await createChatCompletions(payload)
+  const response = await createCompletion(payload)
 
   if (isNonStreaming(response)) {
     consola.debug("Non-streaming response:", JSON.stringify(response))
@@ -66,5 +66,5 @@ export async function handleCompletion(c: Context) {
 }
 
 const isNonStreaming = (
-  response: Awaited<ReturnType<typeof createChatCompletions>>,
+  response: Awaited<ReturnType<typeof createCompletion>>,
 ): response is ChatCompletionResponse => Object.hasOwn(response, "choices")

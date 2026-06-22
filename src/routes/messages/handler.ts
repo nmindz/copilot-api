@@ -7,10 +7,10 @@ import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
 import {
-  createChatCompletions,
   type ChatCompletionChunk,
   type ChatCompletionResponse,
 } from "~/services/copilot/create-chat-completions"
+import { createCompletion } from "~/services/copilot/create-completion"
 
 import {
   type AnthropicMessagesPayload,
@@ -38,7 +38,7 @@ export async function handleCompletion(c: Context) {
     await awaitApproval()
   }
 
-  const response = await createChatCompletions(openAIPayload)
+  const response = await createCompletion(openAIPayload)
 
   if (isNonStreaming(response)) {
     consola.debug(
@@ -87,5 +87,5 @@ export async function handleCompletion(c: Context) {
 }
 
 const isNonStreaming = (
-  response: Awaited<ReturnType<typeof createChatCompletions>>,
+  response: Awaited<ReturnType<typeof createCompletion>>,
 ): response is ChatCompletionResponse => Object.hasOwn(response, "choices")
